@@ -1,0 +1,408 @@
+<!--
+Refactored and hardened gallery app
+- Tailwind config applied safely (set before CDN)
+- Robust DOM-ready init (handles already-fired DOMContentLoaded)
+- Defensive checks for missing elements
+- ID-based operations to avoid stale-index bugs
+- Safer drag/drop handling (only files)
+- Lightbox prev/next fixed when opening from filtered list
+- Download image in lightbox added
+- LocalStorage ops wrapped in try/catch
+- Helpful console.debug & toast on errors
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pastel Glass Gallery — Fixed</title>
+
+  <!-- Tailwind config must be defined before loading the CDN to ensure custom classes are available. We set it safely. -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            lavender: '#C7B9FF',
+            lilac: '#DCC7FF',
+            blush: '#FFC9DE',
+            sky: '#BDE0FE',
+            mint: '#B8F2E6',
+            ink: '#1F2937',
+          },
+          boxShadow: {
+            glow: '0 0 20px rgba(199, 185, 255, 0.45)',
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: 0, transform: 'translateY(10px) scale(0.98)' },
+              '100%': { opacity: 1, transform: 'translateY(0) scale(1)' },
+            },
+            pulseGlow: {
+              '0%,100%': { boxShadow: '0 0 0 rgba(199,185,255,0)' },
+              '50%': { boxShadow: '0 0 24px rgba(199,185,255,0.35)' },
+            }
+          },
+          animation: {
+            fadeInUp: 'fadeInUp .35s ease-out both',
+            pulseGlow: 'pulseGlow 2.2s ease-in-out infinite',
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    .masonry-card { break-inside: avoid; }
+    .glass { background: rgba(255,255,255,0.42); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+    .tilt { transition: transform 200ms ease, box-shadow 200ms ease; transform-style: preserve-3d; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    img { display: block; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-lilac via-sky to-mint text-ink/90 selection:bg-lavender/60">
+
+  <!-- NAVBAR -->
+  <header class="sticky top-0 z-40 bg-white/10 backdrop-blur border-b border-white/20">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-2xl glass shadow-glow grid place-items-center"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4"/><path d="M3 12l9 4 9-4"/></svg></div>
+        <h1 class="font-semibold tracking-tight text-xl">Pastel Glass Gallery</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="openAbout" class="px-3 py-1.5 rounded-xl glass hover:shadow-glow transition">About</button>
+        <a href="#" id="downloadData" class="px-3 py-1.5 rounded-xl glass hover:shadow-glow transition">Export</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- CONTROLS -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+    <div class="glass rounded-2xl p-4 sm:p-5 shadow-lg">
+      <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+        <div class="flex items-center gap-2 flex-1">
+          <div class="relative flex-1">
+            <input id="searchInput" type="search" placeholder="Search by name or tag…" class="w-full rounded-xl bg-white/70 focus:bg-white/90 border border-white/60 px-10 py-2 outline-none shadow-sm focus:ring-2 focus:ring-lavender/60" />
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          </div>
+          <div class="relative">
+            <select id="sortSelect" class="rounded-xl bg-white/70 border border-white/60 px-3 py-2 focus:ring-2 focus:ring-lavender/60">
+              <option value="dateDesc">Newest</option>
+              <option value="dateAsc">Oldest</option>
+              <option value="nameAsc">Name A–Z</option>
+              <option value="nameDesc">Name Z–A</option>
+              <option value="favFirst">Favorites first</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="clearFilters" class="px-3 py-2 rounded-xl bg-white/50 hover:bg-white/70 transition border border-white/60">Clear</button>
+          <label class="px-3 py-2 rounded-xl bg-white/70 hover:bg-white transition border border-white/60 cursor-pointer">
+            <input id="fileInput" type="file" accept="image/*" multiple class="hidden" />
+            <span class="inline-flex items-center gap-2"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><rect x="3" y="14" width="18" height="7" rx="2"/></svg> Upload</span>
+          </label>
+        </div>
+      </div>
+      <div id="tagChips" class="mt-3 flex gap-2 overflow-x-auto no-scrollbar"></div>
+    </div>
+  </section>
+
+  <!-- MAIN -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-24">
+    <div id="emptyState" class="glass rounded-2xl p-10 text-center shadow-lg hidden">
+      <div class="mx-auto w-20 h-20 rounded-3xl glass grid place-items-center mb-4 animate-pulseGlow">
+        <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4"/><path d="M3 12l9 4 9-4"/></svg>
+      </div>
+      <h2 class="text-2xl font-semibold mb-2">Your gallery is empty</h2>
+      <p class="opacity-80 mb-6">Start by uploading images. Drag & drop anywhere or use the button below.</p>
+      <button id="emptyUpload" class="px-4 py-2 rounded-xl bg-ink text-white hover:opacity-90">Upload images</button>
+    </div>
+
+    <section id="gallery" class="columns-1 sm:columns-2 md:columns-3 xl:columns-4 gap-4 min-h-[40vh]"></section>
+  </main>
+
+  <!-- DROP OVERLAY -->
+  <div id="dropOverlay" class="fixed inset-0 z-40 hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-lilac/60 via-sky/60 to-mint/60 backdrop-blur-sm"></div>
+    <div class="relative z-10 h-full w-full flex items-center justify-center">
+      <div class="glass rounded-3xl p-8 shadow-2xl text-center">
+        <div class="w-16 h-16 rounded-2xl glass grid place-items-center mx-auto mb-3 shadow-glow">
+          <svg class="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><rect x="3" y="16" width="18" height="5" rx="2"/></svg>
+        </div>
+        <p class="text-lg font-medium">Drop images to upload</p>
+        <p class="opacity-80 text-sm">JPG, PNG, GIF up to 8 MB each</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div id="lightbox" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative z-10 h-full w-full flex items-center justify-center p-4">
+      <div class="glass w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-white/40">
+          <div class="flex items-center gap-3">
+            <button id="lbPrev" class="p-2 rounded-xl hover:bg-white/50" aria-label="Previous"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <button id="lbNext" class="p-2 rounded-xl hover:bg-white/50" aria-label="Next"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="lbEditTags" class="px-3 py-1.5 rounded-xl bg-white/60 hover:bg-white/80">Edit tags</button>
+            <button id="lbFav" class="p-2 rounded-xl hover:bg-white/50" title="Favorite"><svg id="lbFavIcon" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.74 0 3.41.81 4.5 2.09C12.09 4.81 13.76 4 15.5 4 18 4 20 6 20 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></button>
+            <button id="lbDownload" class="p-2 rounded-xl hover:bg-white/50" title="Download"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12"/><path d="M8 15h8"/><path d="M21 21H3"/></svg></button>
+            <button id="lbDelete" class="p-2 rounded-xl hover:bg-white/50" title="Delete"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18"/><path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6"/><path d="M10 10v8M14 10v8"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></button>
+            <button id="lbClose" class="p-2 rounded-xl hover:bg-white/50" title="Close"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-0">
+          <div class="bg-white/30 p-4 flex items-center justify-center">
+            <img id="lbImage" src="" alt="Preview" class="max-h-[70vh] rounded-2xl shadow-lg"/>
+          </div>
+          <div class="p-5 space-y-3">
+            <h3 id="lbName" class="text-xl font-semibold"></h3>
+            <p id="lbDate" class="opacity-80 text-sm"></p>
+            <div>
+              <h4 class="text-sm font-medium mb-1">Tags</h4>
+              <div id="lbTags" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB -->
+  <button id="fab" class="fixed bottom-6 right-6 z-40 rounded-full p-4 shadow-2xl text-white bg-gradient-to-r from-lavender to-sky hover:shadow-glow active:scale-95 transition" aria-label="Upload">
+    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 4v16"/><path d="M4 12h16"/></svg>
+  </button>
+
+  <!-- TOAST -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden">
+    <div class="glass rounded-xl px-4 py-2 shadow-lg"></div>
+  </div>
+
+  <script>
+  (function(){
+    'use strict';
+
+    // ----- state -----
+    const STORE_KEY = 'cc.gallery.v1';
+    const MAX_SIZE = 8 * 1024 * 1024; // 8MB
+
+    const state = {
+      items: [],
+      selectedTags: new Set(),
+      search: '',
+      sort: 'dateDesc',
+      visible: [],
+      lightboxIndex: null,
+    };
+
+    // ----- small helpers -----
+    const uid = () => (crypto?.randomUUID?.() || ('id-' + Math.random().toString(36).slice(2)));
+    const formatDate = ts => new Date(ts).toLocaleString();
+    const debounce = (fn, wait=200) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; };
+    const q = s => document.querySelector(s);
+    const el = html => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+
+    function safeLocalGet(k){ try { return JSON.parse(localStorage.getItem(k) || 'null') || []; } catch(e){ console.warn('localStorage read failed', e); return []; } }
+    function safeLocalSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){ console.warn('localStorage write failed', e); } }
+
+    function toast(msg, time=1600){ const t = q('#toast'); if(!t) return; t.firstElementChild.textContent = msg; t.classList.remove('hidden'); t.firstElementChild.classList.add('animate-fadeInUp'); clearTimeout(t._h); t._h = setTimeout(()=> { t.classList.add('hidden'); }, time); }
+
+    // ----- persistence -----
+    function save(){ safeLocalSet(STORE_KEY, state.items); }
+    function load(){ state.items = safeLocalGet(STORE_KEY); }
+
+    // ----- tag helpers -----
+    function uniqueTags(){ const s=new Set(); state.items.forEach(it=> (it.tags||[]).forEach(t=>t && s.add(t))); return Array.from(s).sort((a,b)=>a.localeCompare(b)); }
+
+    // ----- id helpers -----
+    function findIndexById(id){ return state.items.findIndex(it=>it.id === id); }
+    function removeById(id){ const i=findIndexById(id); if(i>-1){ state.items.splice(i,1); save(); return true;} return false; }
+    function toggleFavById(id){ const i=findIndexById(id); if(i>-1){ state.items[i].favorite = !state.items[i].favorite; save(); return true;} return false; }
+
+    // ----- compute visible -----
+    function computeVisible(){
+      const qstr = state.search.trim().toLowerCase();
+      const tags = state.selectedTags;
+      let idxs = state.items.map((_,i)=>i);
+
+      if(qstr){ idxs = idxs.filter(i=>{ const it=state.items[i]; const hay = (it.name + ' ' + (it.tags||[]).join(' ')).toLowerCase(); return hay.includes(qstr); }); }
+
+      if(tags.size){ idxs = idxs.filter(i=>{ const T = new Set(state.items[i].tags||[]); for(const t of tags) if(!T.has(t)) return false; return true; }); }
+
+      const sort = state.sort;
+      idxs.sort((ia,ib)=>{
+        const a = state.items[ia], b=state.items[ib];
+        if(sort==='dateDesc') return b.uploadedAt - a.uploadedAt;
+        if(sort==='dateAsc') return a.uploadedAt - b.uploadedAt;
+        if(sort==='nameAsc') return a.name.localeCompare(b.name);
+        if(sort==='nameDesc') return b.name.localeCompare(a.name);
+        if(sort==='favFirst') return (b.favorite?1:0) - (a.favorite?1:0) || b.uploadedAt - a.uploadedAt;
+        return 0;
+      });
+
+      state.visible = idxs;
+    }
+
+    // ----- rendering -----
+    function renderTagChips(){ const host = q('#tagChips'); if(!host) return; host.innerHTML = ''; const tags = uniqueTags(); if(!tags.length){ host.classList.add('hidden'); return; } host.classList.remove('hidden'); tags.forEach(t=>{ const active = state.selectedTags.has(t); const btn = el(`<button data-tag="${t}" class="px-3 py-1 rounded-full border border-white/60 ${active? 'bg-ink text-white':'bg-white/60 hover:bg-white/80'}">#${t}</button>`); btn.addEventListener('click', ()=>{ if(state.selectedTags.has(t)) state.selectedTags.delete(t); else state.selectedTags.add(t); update(); }); host.appendChild(btn); }); }
+
+    function cardTemplate(it){
+      const favCls = it.favorite ? 'text-pink-500' : 'text-ink/70';
+      const tagsHtml = (it.tags||[]).map(t=>`<span class='px-2 py-0.5 text-xs rounded-full bg-white/70 border border-white/60'>#${t}</span>`).join('');
+      return el(`
+        <article class="masonry-card mb-4 group">
+          <div class="tilt glass rounded-2xl overflow-hidden shadow-lg relative transition will-change-transform">
+            <img src="${it.dataUrl}" alt="${it.name}" class="w-full h-auto object-cover group-hover:scale-[1.03] transition duration-300"/>
+            <div class="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition shadow-glow"></div>
+
+            <div class="absolute top-2 right-2 flex gap-1">
+              <button title="Favorite" data-role="fav" class="p-2 rounded-xl bg-white/70 hover:bg-white/90"> 
+                <svg class="w-5 h-5 ${favCls}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.74 0 3.41.81 4.5 2.09C12.09 4.81 13.76 4 15.5 4 18 4 20 6 20 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              </button>
+              <button title="Delete" data-role="del" class="p-2 rounded-xl bg-white/70 hover:bg-white/90">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18"/><path d="M8 6v14a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6"/><path d="M10 10v8M14 10v8"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+
+            <div class="p-3">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="font-medium truncate" title="${it.name}">${it.name}</h3>
+                <div class="text-xs opacity-70">${new Date(it.uploadedAt).toLocaleDateString()}</div>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1">${tagsHtml}</div>
+              <div class="mt-2 flex items-center gap-2">
+                <button data-role="edit-tags" class="px-2 py-1 text-xs rounded-lg bg-white/70 border border-white/60 hover:bg-white">Edit tags</button>
+                <button data-role="open" class="ml-auto px-2 py-1 text-xs rounded-lg bg-ink text-white hover:opacity-90">Preview</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      `);
+    }
+
+    function attachTilt(card){ const wrap = card.querySelector('.tilt'); if(!wrap) return; let rect=null; function onMove(e){ if(!rect) rect = wrap.getBoundingClientRect(); const x = (e.clientX - rect.left) / rect.width - 0.5; const y = (e.clientY - rect.top) / rect.height - 0.5; wrap.style.transform = `rotateX(${-y*4}deg) rotateY(${x*4}deg)`; } function reset(){ wrap.style.transform = 'rotateX(0) rotateY(0)'; rect = null; } wrap.addEventListener('mousemove', onMove); wrap.addEventListener('mouseleave', reset); }
+
+    function renderGallery(){
+      computeVisible();
+      const host = q('#gallery'); if(!host) return;
+      host.innerHTML = '';
+      if(!state.visible.length){ q('#emptyState')?.classList.remove('hidden'); return; } else q('#emptyState')?.classList.add('hidden');
+
+      state.visible.forEach((indexInItems, iVis)=>{
+        const it = state.items[indexInItems]; if(!it) return;
+        const card = cardTemplate(it);
+        card.classList.add('animate-fadeInUp');
+
+        const openBtn = card.querySelector('[data-role="open"]');
+        const favBtn = card.querySelector('[data-role="fav"]');
+        const delBtn = card.querySelector('[data-role="del"]');
+        const editBtn = card.querySelector('[data-role="edit-tags"]');
+
+        if(openBtn) openBtn.addEventListener('click', ()=> openLightbox(iVis));
+        if(favBtn) favBtn.addEventListener('click', ()=> { toggleFavById(it.id); update(); });
+        if(delBtn) delBtn.addEventListener('click', ()=> { if(confirm('Delete this image?')){ removeById(it.id); update(); } });
+        if(editBtn) editBtn.addEventListener('click', ()=> editTags(it.id));
+
+        attachTilt(card);
+        host.appendChild(card);
+      });
+    }
+
+    function renderLightbox(indexInVisible){
+      const modal = q('#lightbox'); if(!modal) return;
+      if(indexInVisible == null){ modal.classList.add('hidden'); state.lightboxIndex = null; return; }
+      state.lightboxIndex = indexInVisible;
+      const itemIndex = state.visible[indexInVisible]; const it = state.items[itemIndex]; if(!it){ modal.classList.add('hidden'); return; }
+      q('#lbImage').src = it.dataUrl; q('#lbImage').alt = it.name;
+      q('#lbName').textContent = it.name; q('#lbDate').textContent = 'Uploaded ' + formatDate(it.uploadedAt);
+      const tagsHost = q('#lbTags'); tagsHost.innerHTML = ''; (it.tags||[]).forEach(t=> tagsHost.appendChild(el(`<span class='px-2 py-0.5 text-xs rounded-full bg-white/70 border border-white/60'>#${t}</span>`)));
+      q('#lbFavIcon').style.color = it.favorite ? '#ec4899' : '#111827';
+      modal.classList.remove('hidden');
+    }
+
+    function openLightbox(i){ renderLightbox(i); }
+    function closeLightbox(){ renderLightbox(null); }
+
+    // ----- tags (edit via prompt) -----
+    function editTags(idOrIndex){
+      let item = (typeof idOrIndex === 'number') ? state.items[idOrIndex] : state.items.find(x=>x.id===idOrIndex);
+      if(!item) return; const current = (item.tags||[]).join(', ');
+      const input = prompt('Enter comma-separated tags', current); if(input==null) return; const tags = input.split(',').map(s=>s.trim()).filter(Boolean); item.tags = Array.from(new Set(tags)); save(); update();
+    }
+
+    // ----- uploads -----
+    async function filesToItems(fileList){
+      const arr = Array.from(fileList||[]).filter(f => f && f.type && f.type.startsWith('image/'));
+      let oversized = 0; const out = [];
+      for(const f of arr){ if(f.size > MAX_SIZE){ oversized++; continue; } try{ const dataUrl = await new Promise((res, rej)=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.onerror = rej; r.readAsDataURL(f); }); out.push({ id: uid(), name: f.name.replace(/\.[^.]+$/,''), dataUrl, uploadedAt: Date.now(), tags: [], favorite: false }); } catch(e){ console.warn('FileReader error', e); }
+      }
+      if(oversized) toast(`${oversized} file(s) skipped (> ${MAX_SIZE/1024/1024}MB)`);
+      return out;
+    }
+
+    async function handleFiles(fileList){ try{ const items = await filesToItems(fileList); if(!items.length) return; state.items.unshift(...items); save(); update(); toast(`Added ${items.length} image${items.length>1?'s':''}`); } catch(e){ console.error('handleFiles failed', e); toast('Upload failed'); } }
+
+    // ----- events and bindings -----
+    function update(){ renderTagChips(); renderGallery(); }
+
+    function bindEvents(){
+      const fileInput = q('#fileInput'); const emptyUpload = q('#emptyUpload'); const fab = q('#fab');
+      if(fileInput) fileInput.addEventListener('change', e=> { handleFiles(e.target.files).then(()=> { fileInput.value = ''; }); });
+      if(emptyUpload) emptyUpload.addEventListener('click', ()=> fileInput && fileInput.click());
+      if(fab) fab.addEventListener('click', ()=> fileInput && fileInput.click());
+
+      const searchEl = q('#searchInput'); if(searchEl) searchEl.addEventListener('input', debounce(e=>{ state.search = e.target.value || ''; update(); },130));
+      const sortEl = q('#sortSelect'); if(sortEl) sortEl.addEventListener('change', e=>{ state.sort = e.target.value; update(); });
+
+      const clearBtn = q('#clearFilters'); if(clearBtn) clearBtn.addEventListener('click', ()=>{ state.selectedTags.clear(); state.search=''; state.sort='dateDesc'; if(searchEl) searchEl.value=''; if(sortEl) sortEl.value='dateDesc'; toast('Filters cleared'); update(); });
+
+      // drag & drop — only show overlay for file drags
+      const overlay = q('#dropOverlay'); let dragDepth = 0;
+      window.addEventListener('dragenter', (e)=>{ const types = e.dataTransfer && e.dataTransfer.types; if(types && Array.from(types).includes('Files')){ dragDepth++; overlay && overlay.classList.remove('hidden'); } });
+      window.addEventListener('dragleave', (e)=>{ const types = e.dataTransfer && e.dataTransfer.types; if(types && Array.from(types).includes('Files')){ dragDepth = Math.max(0, dragDepth - 1); if(!dragDepth) overlay && overlay.classList.add('hidden'); } });
+      window.addEventListener('dragover', (e)=>{ if(e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) e.preventDefault(); });
+      window.addEventListener('drop', (e)=>{ e.preventDefault(); dragDepth = 0; overlay && overlay.classList.add('hidden'); if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+
+      // lightbox
+      const lbClose = q('#lbClose'); const lbPrev = q('#lbPrev'); const lbNext = q('#lbNext'); const lbFav = q('#lbFav'); const lbDelete = q('#lbDelete'); const lbEditTags = q('#lbEditTags'); const lbDownload = q('#lbDownload');
+      if(lbClose) lbClose.addEventListener('click', closeLightbox);
+      if(lbPrev) lbPrev.addEventListener('click', ()=>{ if(!state.visible.length) return; const cur = state.lightboxIndex ?? 0; const next = (cur - 1 + state.visible.length) % state.visible.length; openLightbox(next); });
+      if(lbNext) lbNext.addEventListener('click', ()=>{ if(!state.visible.length) return; const cur = state.lightboxIndex ?? 0; const next = (cur + 1) % state.visible.length; openLightbox(next); });
+
+      if(lbFav) lbFav.addEventListener('click', ()=>{ const vis = state.lightboxIndex; if(vis == null) return; const id = state.items[state.visible[vis]]?.id; if(!id) return; toggleFavById(id); renderLightbox(state.lightboxIndex); update(); });
+      if(lbDelete) lbDelete.addEventListener('click', ()=>{ const vis = state.lightboxIndex; if(vis == null) return; const id = state.items[state.visible[vis]]?.id; if(!id) return; if(confirm('Delete this image?')){ removeById(id); closeLightbox(); update(); } });
+      if(lbEditTags) lbEditTags.addEventListener('click', ()=>{ const vis = state.lightboxIndex; if(vis == null) return; const id = state.items[state.visible[vis]]?.id; if(!id) return; editTags(id); renderLightbox(state.lightboxIndex); });
+      if(lbDownload) lbDownload.addEventListener('click', ()=>{ const vis = state.lightboxIndex; if(vis == null) return; const it = state.items[state.visible[vis]]; if(!it) return; // download dataUrl
+        const a = document.createElement('a'); a.href = it.dataUrl; a.download = it.name || 'image'; document.body.appendChild(a); a.click(); a.remove(); });
+
+      // keyboard while open
+      document.addEventListener('keydown', (e)=>{ const modalOpen = !q('#lightbox')?.classList.contains('hidden'); if(!modalOpen) return; if(e.key === 'Escape') closeLightbox(); if(e.key === 'ArrowLeft') lbPrev && lbPrev.click(); if(e.key === 'ArrowRight') lbNext && lbNext.click(); });
+
+      // export json
+      const exportBtn = q('#downloadData'); if(exportBtn) exportBtn.addEventListener('click', (e)=>{ e.preventDefault(); try{ const blob = new Blob([JSON.stringify(state.items, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'gallery.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=> URL.revokeObjectURL(url), 5000); } catch(err){ console.warn(err); toast('Export failed'); } });
+
+      // about
+      const about = q('#openAbout'); if(about) about.addEventListener('click', ()=>{ alert('Pastel Glass Gallery'); 
+        
+      });
+    }
+
+    // ----- init -----
+    function init(){ try{ load(); bindEvents(); update(); console.debug('Gallery initialized', state); } catch(e){ console.error('Init failed', e); toast('Initialization error'); } }
+
+    // run immediately if DOM already loaded, otherwise wait
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+
+    // expose for debugging if needed
+    window.__gallery = { state, save, load, update };
+
+  })();
+  </script>
+</body>
+</html>
