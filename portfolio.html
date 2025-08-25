@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vaishanavi S. Shelke | Portfolio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #fadadf, #deebff);
+      color: #333;
+      overflow-x: hidden;
+    }
+
+    header {
+      background: #512da8;
+      color: white;
+      padding: 3rem 2rem;
+      text-align: center;
+      animation: slideDown 1s ease-in-out;
+    }
+
+    header h1 {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      font-size: 1.2rem;
+    }
+
+    nav {
+      background: white;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      padding: 1rem 0;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    nav a {
+      text-decoration: none;
+      color: #512da8;
+      font-weight: 600;
+      transition: color 0.3s;
+    }
+
+    nav a:hover {
+      color: #f44336;
+    }
+
+    section {
+      padding: 3rem 2rem;
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    .about {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .about img {
+      width: 200px;
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .about-content {
+      flex: 1;
+      animation: fadeIn 1s ease-in;
+    }
+
+    .about-content h2 {
+      color: #512da8;
+      font-size: 2rem;
+    }
+
+    .about-content p {
+      margin-top: 0.8rem;
+      line-height: 1.6;
+    }
+
+    .skills {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+    .card {
+      background: #fff;
+      padding: 1.5rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+      transition: transform 0.3s;
+    }
+
+    .card:hover {
+      transform: translateY(-10px);
+    }
+
+
+    .projects {
+      background: #f5f5f5;
+      border-radius: 15px;
+      padding: 2rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .projects h2 {
+      text-align: center;
+      color: #512da8;
+      margin-bottom: 2rem;
+    }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2rem;
+    }
+
+   .project-card {
+      background: #292945;
+      padding: 1.5rem;
+      border-radius: 15px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s ease, background 0.3s;
+      color: #fff;
+    }
+
+    .project-card:hover {
+      transform: scale(1.05);
+      background: #343459;
+    }
+
+    .project-card a {
+      display: inline-block;
+      background: linear-gradient(135deg, #00e0ff, #8e2de2);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      text-decoration: none;
+      margin-top: 1rem;
+      transition: transform 0.3s ease;
+    }
+
+    .project-card a:hover {
+      transform: translateY(-3px);
+    }
+
+  footer {
+      text-align: center;
+      padding: 2rem;
+      background: linear-gradient(135deg, #4a00e0, #0f0c29);
+      color: white;
+      margin-top: 4rem;
+    }
+
+    @keyframes slideDown {
+      from {
+        transform: translateY(-100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .about {
+        flex-direction: column;
+      }
+
+      header h1 {
+        font-size: 2rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Vaishanavi S. Shelke</h1>
+    <p>Frontend Developer | MERN Enthusiast | Java Learner | Android App Developer</p>
+  </header>
+
+  <nav>
+    <a href="#about">About</a>
+    <a href="#projects">Projects</a>
+    <a href="#contact">Contact</a>
+  </nav>
+
+  <section id="about" class="about">
+    <img src="my_image.jpg" alt="Vaishanavi Profile" />
+    <div class="about-content">
+      <h2>Hi, I'm Vaishanavi 👋</h2>
+      <p>
+        I'm a SY B.Tech CST student with experience in HTML, CSS, JavaScript, and MERN stack. I've worked on impactful projects like <strong>Raksha</strong> (Hackathon finalist), a women's hygiene and safety tool. I love building beautiful interfaces and learning new tech like Java and DSA. 
+      </p>
+    </div>
+  </section>
+
+  
+  <section id="skills">
+    <h2 class="section-title">Skills</h2>
+    <div class="skills">
+      <div class="card">HTML5 / CSS3</div>
+      <div class="card">JavaScript</div>
+      <div class="card">C Programming</div>
+      <div class="card">React.js</div>
+      <div class="card">Node.js</div>
+      <div class="card">MongoDB</div>
+      <div class="card">C++</div>
+      <div class="card">Git & GitHub</div>
+      <div class="card">Java (Learning)</div>
+    </div>
+  </section>
+
+
+  <section id="projects"  class="projects">
+    <h2>Featured Projects 🚀</h2>
+    <div class="project-grid">
+      <div class="project-card">
+        <h3>Raksha</h3>
+        <p>Women's hygiene alert system. Heatmap, admin panel, SMS alerts integrated with Twilio + Node.js backend.</p>
+        <a href="#">View Project</a>
+      </div>
+      <div class="project-card">
+        <h3>TaskNest</h3>
+        <p>To-do planner with pastel UI, bottom nav, profile avatar, notes + tasks. Built in Android Studio (Java).</p>
+        <a href="#">View Project</a>
+      </div>
+      <div class="project-card">
+        <h3>Lost & Found Portal</h3>
+        <p>Frontend-only platform to report and locate lost items. Made with HTML/CSS/JS. Modern layout + filters.</p>
+        <a href="#">View Project</a>
+      </div>
+      <div class="project-card">
+        <h3>Dicto App</h3>
+        <p>Gamified productivity app inspired by Habitica. Pastel theme, interactive tasks, and smooth animations.</p>
+        <a href="#">View Project</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact">
+    <h2 style="text-align:center; color:#512da8; margin-bottom: 1rem;">Let's Connect 🤝</h2>
+    <p style="text-align:center; max-width:600px; margin: auto;">
+      Open to internships, collaborations and tech discussions. Let's build something amazing together!
+    </p>
+    <div style="text-align:center; margin-top:2rem;">
+      <a href="mailto:vaishanavishelke@gmail.com" style="color:#512da8; margin:0 1rem; font-size:1.5rem;"><i class="fas fa-envelope"></i></a>
+      <a href="https://linkedin.com/in/your-link" target="_blank" style="color:#512da8; margin:0 1rem; font-size:1.5rem;"><i class="fab fa-linkedin"></i></a>
+      <a href="https://github.com/your-github" target="_blank" style="color:#512da8; margin:0 1rem; font-size:1.5rem;"><i class="fab fa-github"></i></a>
+    </div>
+  </section>
+
+  <footer>
+    <p>Made with 💜 by Vaishanavi Shelke | 2025</p>
+  </footer>
+</body>
+
+</html>
